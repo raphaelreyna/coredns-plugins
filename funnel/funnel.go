@@ -15,22 +15,26 @@ type Funnel struct {
 	zones        []string
 	ttl          uint32
 
-	idx               uint32
+	idx               uint64
 	destinationsCount int
 
-	Next plugin.Handler
+	next plugin.Handler
 }
 
 func (f *Funnel) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
 	req := request.Request{W: w, Req: r}
+	if req.QType() != dns.TypeA {
+		return plugin.NextOrFailure(f.Name(), f.next, ctx, w, r)
+	}
+
 	qname := req.Name()
 	zone := plugin.Zones(f.zones).Matches(qname)
 
 	if zone == "" {
-		return plugin.NextOrFailure(f.Name(), f.Next, ctx, w, r)
+		return plugin.NextOrFailure(f.Name(), f.next, ctx, w, r)
 	}
 
-	atomic.AddUint32(&f.idx, 1)
+	atomic.AddUint64(&f.idx, 1)
 
 	m := new(dns.Msg)
 	m.SetReply(r)
